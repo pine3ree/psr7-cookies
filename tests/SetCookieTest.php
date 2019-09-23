@@ -35,6 +35,11 @@ final class SetCookieTest extends \PHPUnit_Framework_TestCase
         $this->assertSame($secure, $setCookie->isSecure());
         $this->assertSame($httpOnly, $setCookie->isHttpOnly());
         $this->assertSame($sameSite, $setCookie->getSameSite());
+        $this->assertSame(null, $setCookie->getMaxAge());
+
+        $maxAge = 0;
+        $setCookie = new SetCookie('name', 'value', $expiresAt, $path, $domain, $secure, $httpOnly, $sameSite, $maxAge);
+        $this->assertSame($maxAge, $setCookie->getMaxAge());
     }
 
     public function test_it_can_be_added_to_a_psr_response()
@@ -76,6 +81,15 @@ final class SetCookieTest extends \PHPUnit_Framework_TestCase
         $cookie = new SetCookie('name', 'value', 0, '/path/', 'domain.tld', true, true, 'strict');
         $this->assertEquals('name=value; path=/path/; domain=domain.tld; secure; httponly; samesite=strict', $cookie->toHeaderValue());
 
+        $cookie = new SetCookie('name', 'value', 0, '', '', false, false, '', 1440);
+        $this->assertEquals('name=value; max-age=1440', $cookie->toHeaderValue());
+
+        $cookie = new SetCookie('name', 'value', 0, '', '', false, false, '', 0);
+        $this->assertEquals('name=value; max-age=0', $cookie->toHeaderValue());
+
+        $cookie = new SetCookie('name', 'value', 0, '', '', false, false, '', -1);
+        $this->assertEquals('name=value; max-age=-1', $cookie->toHeaderValue());
+
         $cookie = SetCookie::thatDeletesCookie('name');
         $expected = sprintf('name=deleted; expires=%s', gmdate(self::$HTTP_DATE_FORMAT, 1));
         $this->assertEquals($expected, $cookie->toHeaderValue());
@@ -101,14 +115,14 @@ final class SetCookieTest extends \PHPUnit_Framework_TestCase
         $expireSecs = 123;
         $expireTS = time() + $expireSecs;
         $cookie = SetCookie::thatExpiresIn('name', 'value', $expireSecs);
-        $expected = sprintf('name=value; expires=%s', gmdate(self::$HTTP_DATE_FORMAT, $expireTS));
+        $expected = sprintf('name=value; expires=%s; max-age=%d', gmdate(self::$HTTP_DATE_FORMAT, $expireTS), $expireSecs);
         $this->assertEquals($expected, $cookie->toHeaderValue());
 
         // test negative seconds interval
         $expireSecs = -123;
         $expireTS = time() + $expireSecs;
         $cookie = SetCookie::thatExpiresIn('name', 'value', $expireSecs);
-        $expected = sprintf('name=value; expires=%s', gmdate(self::$HTTP_DATE_FORMAT, $expireTS));
+        $expected = sprintf('name=value; expires=%s; max-age=%d', gmdate(self::$HTTP_DATE_FORMAT, $expireTS), $expireSecs);
         $this->assertEquals($expected, $cookie->toHeaderValue());
 
         // test positive string expression interval
@@ -116,7 +130,7 @@ final class SetCookieTest extends \PHPUnit_Framework_TestCase
         $expireSecs = 1 * 86400;
         $expireTS = time() + $expireSecs;
         $cookie = SetCookie::thatExpiresIn('name', 'value', $expireStr);
-        $expected = sprintf('name=value; expires=%s', gmdate(self::$HTTP_DATE_FORMAT, $expireTS));
+        $expected = sprintf('name=value; expires=%s; max-age=%d', gmdate(self::$HTTP_DATE_FORMAT, $expireTS), $expireSecs);
         $this->assertEquals($expected, $cookie->toHeaderValue());
 
         // test negative string expression interval
@@ -124,7 +138,7 @@ final class SetCookieTest extends \PHPUnit_Framework_TestCase
         $expireSecs = -1 * 86400;
         $expireTS = time() + $expireSecs;
         $cookie = SetCookie::thatExpiresIn('name', 'value', $expireStr);
-        $expected = sprintf('name=value; expires=%s', gmdate(self::$HTTP_DATE_FORMAT, $expireTS));
+        $expected = sprintf('name=value; expires=%s; max-age=%d', gmdate(self::$HTTP_DATE_FORMAT, $expireTS), $expireSecs);
         $this->assertEquals($expected, $cookie->toHeaderValue());
 
         // test 0 string expression interval
@@ -132,7 +146,7 @@ final class SetCookieTest extends \PHPUnit_Framework_TestCase
         $expireSecs = 0 * 86400;
         $expireTS = time() + $expireSecs;
         $cookie = SetCookie::thatExpiresIn('name', 'value', $expireStr);
-        $expected = sprintf('name=value; expires=%s', gmdate(self::$HTTP_DATE_FORMAT, $expireTS));
+        $expected = sprintf('name=value; expires=%s; max-age=%d', gmdate(self::$HTTP_DATE_FORMAT, $expireTS), $expireSecs);
         $this->assertEquals($expected, $cookie->toHeaderValue());
 
         // test positive DateInterval
@@ -141,7 +155,7 @@ final class SetCookieTest extends \PHPUnit_Framework_TestCase
         $expireTS = time() + $expireSecs;
         $expireIn = DateInterval::createFromDateString($expireStr);
         $cookie = SetCookie::thatExpiresIn('name', 'value', $expireIn);
-        $expected = sprintf('name=value; expires=%s', gmdate(self::$HTTP_DATE_FORMAT, $expireTS));
+        $expected = sprintf('name=value; expires=%s; max-age=%d', gmdate(self::$HTTP_DATE_FORMAT, $expireTS), $expireSecs);
         $this->assertEquals($expected, $cookie->toHeaderValue());
 
         // test negative DateInterval
@@ -150,7 +164,7 @@ final class SetCookieTest extends \PHPUnit_Framework_TestCase
         $expireTS = time() + $expireSecs;
         $expireIn = DateInterval::createFromDateString($expireStr);
         $cookie = SetCookie::thatExpiresIn('name', 'value', $expireIn);
-        $expected = sprintf('name=value; expires=%s', gmdate(self::$HTTP_DATE_FORMAT, $expireTS));
+        $expected = sprintf('name=value; expires=%s; max-age=%d', gmdate(self::$HTTP_DATE_FORMAT, $expireTS), $expireSecs);
         $this->assertEquals($expected, $cookie->toHeaderValue());
 
         // test empty DateInterval
@@ -158,7 +172,7 @@ final class SetCookieTest extends \PHPUnit_Framework_TestCase
         $expireSecs = 0;
         $expireTS = time() + $expireSecs;
         $cookie = SetCookie::thatExpiresIn('name', 'value', $expireIn);
-        $expected = sprintf('name=value; expires=%s', gmdate(self::$HTTP_DATE_FORMAT, $expireTS));
+        $expected = sprintf('name=value; expires=%s; max-age=%d', gmdate(self::$HTTP_DATE_FORMAT, $expireTS), $expireSecs);
         $this->assertEquals($expected, $cookie->toHeaderValue());
     }
 

@@ -30,6 +30,7 @@ final class SetCookie
     private $secure;
     private $httpOnly;
     private $sameSite;
+    private $maxAge;
 
     /**
      * SetCookie constructor.
@@ -42,6 +43,7 @@ final class SetCookie
      * @param bool $secure Whether the cookie should only be transmitted over a secure HTTPS connection from the client
      * @param bool $httpOnly Whether the cookie will be made accessible only through the HTTP protocol
      * @param string $sameSite Specifies if the cookie should be send on a cross site request
+     * @param int|null $maxAge If set specifies the time the cookie expires in seconds form the current time
      *
      * @throws InvalidArgumentException When the cookie name is not valid
      */
@@ -53,7 +55,8 @@ final class SetCookie
         string $domain = '',
         bool $secure = false,
         bool $httpOnly = false,
-        string $sameSite = ''
+        string $sameSite = '',
+        int $maxAge = null
     ) {
         $this->assertValidName($name);
         $this->assertValidSameSite($sameSite);
@@ -65,6 +68,7 @@ final class SetCookie
         $this->secure = $secure;
         $this->httpOnly = $httpOnly;
         $this->sameSite = $sameSite;
+        $this->maxAge = $maxAge;
     }
 
     public static function thatDeletesCookie(
@@ -122,7 +126,7 @@ final class SetCookie
     ) : SetCookie {
         $time = time();
         if (is_int($expiresIn)) {
-            $expiresAt = $time + $expiresIn;
+            $expiresAt = $time + ($maxAge = $expiresIn);
         } elseif (is_string($expiresIn)) {
             $expiresAt = strtotime($expiresIn, $time);
             if ($expiresAt === false) {
@@ -130,10 +134,11 @@ final class SetCookie
                     'The provided "$expiresIn" value is not a valid date interval string!'
                 );
             }
+            $maxAge = $expiresAt - $time;
         } elseif ($expiresIn instanceof DateInterval) {
             $d1 = new DateTimeImmutable("@{$time}");
             $d2 = $d1->add($expiresIn);
-            $expiresAt = $time + ($d2->getTimestamp() - $d1->getTimestamp());
+            $expiresAt = $time + ($maxAge = $d2->getTimestamp() - $d1->getTimestamp());
         } else {
             throw new InvalidArgumentException(sprintf(
                 'The "$expiresIn" argument MUST be an integer, a string or a DateInterval instance, "%s" provided!',
@@ -141,7 +146,7 @@ final class SetCookie
             ));
         }
 
-        return new static($name, $value, $expiresAt, $path, $domain, $secure, $httpOnly, $sameSite);
+        return new static($name, $value, $expiresAt, $path, $domain, $secure, $httpOnly, $sameSite, $maxAge ?? null);
     }
 
     public static function thatStaysForever(
@@ -218,6 +223,15 @@ final class SetCookie
         return $this->sameSite;
     }
 
+    /**
+     * Return the max-age seconds, if set
+     * @return int|null
+     */
+    public function getMaxAge()
+    {
+        return $this->maxAge;
+    }
+
     public function toHeaderValue() : string
     {
         $headerValue = sprintf('%s=%s', $this->name, urlencode($this->value));
@@ -247,6 +261,10 @@ final class SetCookie
 
         if ($this->sameSite != '') {
             $headerValue .= sprintf('; samesite=%s', $this->sameSite);
+        }
+
+        if (is_int($this->maxAge)) {
+            $headerValue .= sprintf('; max-age=%d', $this->maxAge);
         }
 
         return $headerValue;
